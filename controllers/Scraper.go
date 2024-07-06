@@ -3,6 +3,7 @@ package controllers
 import (
 	"fmt"
 	"log"
+	"regexp"
 	"strings"
 	"time"
 
@@ -12,6 +13,7 @@ import (
 )
 
 var wikipediaUrl = "https://pt.wikipedia.org"
+var bornInBrazilByUF = wikipediaUrl + "/wiki/Categoria:Naturais_do_Brasil_por_unidade_federativa"
 
 func RunScraper() {
 	fmt.Println("Starting Wikipedia Scrapping ...")
@@ -20,7 +22,7 @@ func RunScraper() {
 
 func federatedUnitBrazilScrap() {
 
-	ufLinks := make(map[string]string)
+	ufLinks := make(map[*models.State]string)
 	c := colly.NewCollector()
 	c.UserAgent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
 
@@ -44,7 +46,7 @@ func federatedUnitBrazilScrap() {
 				database.DB.Create(&models.State{Name: uf})
 			}
 
-			ufLinks[uf] = wikipediaUrl + link
+			ufLinks[&state] = wikipediaUrl + link
 		}
 	})
 
@@ -53,23 +55,24 @@ func federatedUnitBrazilScrap() {
 		citiesScrap(ufLinks)
 	})
 
-	c.Visit(wikipediaUrl + "/wiki/Categoria:Naturais_do_Brasil_por_unidade_federativa")
+	c.Visit(bornInBrazilByUF)
 }
 
-func citiesScrap(states map[string]string) {
+func citiesScrap(states map[*models.State]string) {
 	t1 := time.Now()
 	for k, v := range states {
 
 		uf := k
 		link := v
 
-		fmt.Println(uf)
+		//TODO: Need to remove, I just added this to skip all cities and states
+		if !strings.Contains(uf.Name, "São Paulo") {
+			continue
+		}
 
+		fmt.Println(uf.Name)
 		c := colly.NewCollector()
-
-		c.OnRequest(func(r *colly.Request) {
-			//fmt.Println("Visiting: ", r.URL)
-		})
+		c.OnRequest(func(r *colly.Request) {})
 
 		c.OnError(func(_ *colly.Response, err error) {
 			log.Panic("Something went wrong: ", err)
@@ -78,10 +81,16 @@ func citiesScrap(states map[string]string) {
 		c.OnHTML("#mw-subcategories", func(e *colly.HTMLElement) {
 
 			e.ForEach(".mw-category-group", func(_ int, elem *colly.HTMLElement) {
-				if elem.ChildText("h3") != "" {
+				h3Title := elem.ChildText("h3") //From A to Z, however, some pages have ~ and empty strings that we don't care;
+
+				if regexp.MustCompile(`[A-Z]`).MatchString(h3Title) {
 					elem.ForEach("a[href]", func(_ int, elem2 *colly.HTMLElement) {
-						fmt.Println(elem2.Text + " >>> " + elem2.Attr("href"))
+						city := elem2.Text
+						link := elem2.Attr("href")
+						fmt.Println(city + " >>> " + link)
 					})
+				} else {
+					fmt.Println("Empty or ~")
 				}
 			})
 		})
