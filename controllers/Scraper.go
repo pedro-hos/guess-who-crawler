@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"log"
 	"regexp"
+	"strconv"
 	"strings"
 	"time"
 
@@ -23,7 +24,7 @@ func RunScraper() {
 
 func federatedUnitBrazilScrap() {
 
-	ufLinks := make(map[*models.State]string)
+	ufLinks := make(map[string]string)
 	c := colly.NewCollector()
 	c.UserAgent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
 
@@ -36,7 +37,6 @@ func federatedUnitBrazilScrap() {
 		link := e.Attr("href")
 		if isStateCategoryLink(link) {
 			uf := clearCityAndStateNames(e.Text)
-
 			state := models.State{}
 			database.DB.Where(&models.State{Name: uf}).First(&state)
 
@@ -44,7 +44,7 @@ func federatedUnitBrazilScrap() {
 				database.DB.Create(&models.State{Name: uf})
 			}
 
-			ufLinks[&state] = wikipediaUrl + link
+			ufLinks[uf] = wikipediaUrl + link
 		}
 	})
 
@@ -55,19 +55,22 @@ func federatedUnitBrazilScrap() {
 	c.Visit(bornInBrazilByUF)
 }
 
-func citiesScrap(states map[*models.State]string) {
+func citiesScrap(states map[string]string) {
 	t1 := time.Now()
 	for k, v := range states {
 
 		uf := k
 		link := v
 
-		//TODO: Need to remove, I just added this to skip all cities and states
-		if !strings.Contains(uf.Name, "São Paulo") {
+		state := models.State{}
+		database.DB.Where(&models.State{Name: uf}).First(&state)
+
+		fmt.Println("#### Scrappring State [ " + strconv.FormatUint(uint64(state.ID), 10) + " ] " + state.Name)
+
+		if state.ID == 0 {
+			fmt.Println("Deu ruim")
 			continue
 		}
-
-		fmt.Println("#### Scrappring State: " + uf.Name + " ####")
 
 		c := colly.NewCollector()
 		c.OnRequest(func(r *colly.Request) {})
@@ -88,8 +91,13 @@ func citiesScrap(states map[*models.State]string) {
 
 					if regexp.MustCompile(`[A-Z]`).MatchString(h3Title) || isSpOrRJCityNatural {
 						link := elem2.Attr("href")
+						city := models.City{}
 
-						fmt.Println(cityName + " >>> " + link)
+						database.DB.Where(&models.City{Name: cityName}).First(&city)
+
+						if city.ID == 0 {
+							database.DB.Create(&models.City{Name: cityName, StateId: state.ID})
+						}
 
 						e.Request.Visit(wikipediaUrl + link)
 					}
@@ -106,11 +114,30 @@ func citiesScrap(states map[*models.State]string) {
 					e.Request.Visit(wikipediaUrl + link)
 				}
 			})
-
 		})
 
-		c.OnHTML("#mw-pages", func(e *colly.HTMLElement) {
-			//fmt.Println("Page " + e.Text)
+		c.OnHTML("main#content", func(e *colly.HTMLElement) {
+
+			cityName := clearCityAndStateNames(e.DOM.Find(".mw-page-title-main").Text())
+			city := models.City{}
+			database.DB.Where(&models.City{Name: cityName, StateId: state.ID}).First(&city)
+
+			if city.ID == 0 {
+				fmt.Printf("Erro ao buscar %s, não encontrada", cityName)
+			}
+
+			categoryGroup := e.DOM.Find(".mw-category-generated").Find("div.mw-category-group")
+			treeSection := categoryGroup.Find(".CategoryTreeSection")
+
+			categoryGroup.Each(func(i int, s *goquery.Selection) {
+				if s.HasNodes(treeSection.Nodes...).Length() == 0 {
+					s.Find("a[href]").Each(func(count int, s2 *goquery.Selection) {
+						link, _ := s2.Attr("href")
+						name := s2.Text()
+						database.DB.Create(&models.Card{Answer: name, CityId: city.ID, WikipediaURL: wikipediaUrl + link})
+					})
+				}
+			})
 		})
 
 		c.OnScraped(func(r *colly.Response) {})
