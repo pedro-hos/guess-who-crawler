@@ -123,21 +123,22 @@ func citiesScrap(states map[string]string) {
 			database.DB.Where(&models.City{Name: cityName, StateId: state.ID}).First(&city)
 
 			if city.ID == 0 {
+				//some pages have people there are not related to the city, but to the state. So far, I don't want to save them. Need to think if I will save on State Capital, or just don't save
 				fmt.Printf("Erro ao buscar %s, não encontrada", cityName)
+			} else {
+				categoryGroup := e.DOM.Find(".mw-category-generated").Find("div.mw-category-group")
+				treeSection := categoryGroup.Find(".CategoryTreeSection")
+
+				categoryGroup.Each(func(i int, s *goquery.Selection) {
+					if s.HasNodes(treeSection.Nodes...).Length() == 0 {
+						s.Find("a[href]").Each(func(count int, s2 *goquery.Selection) {
+							link, _ := s2.Attr("href")
+							name := s2.Text()
+							database.DB.Create(&models.Card{Answer: name, CityId: city.ID, WikipediaURL: wikipediaUrl + link})
+						})
+					}
+				})
 			}
-
-			categoryGroup := e.DOM.Find(".mw-category-generated").Find("div.mw-category-group")
-			treeSection := categoryGroup.Find(".CategoryTreeSection")
-
-			categoryGroup.Each(func(i int, s *goquery.Selection) {
-				if s.HasNodes(treeSection.Nodes...).Length() == 0 {
-					s.Find("a[href]").Each(func(count int, s2 *goquery.Selection) {
-						link, _ := s2.Attr("href")
-						name := s2.Text()
-						database.DB.Create(&models.Card{Answer: name, CityId: city.ID, WikipediaURL: wikipediaUrl + link})
-					})
-				}
-			})
 		})
 
 		c.OnScraped(func(r *colly.Response) {})
