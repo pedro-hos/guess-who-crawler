@@ -20,5 +20,5 @@ func Connect() {
 	}
 
 	// Migrate the schema
-	DB.AutoMigrate(&models.Card{}, &models.City{}, &models.State{}, &models.Tip{})
+	DB.AutoMigrate(&models.Card{}, &models.City{}, &models.State{}, &models.Clue{})
 }
