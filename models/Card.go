@@ -7,6 +7,7 @@ type Card struct {
 	ID           uint   `gorm:"primaryKey"`
 	Answer       string `gorm:"not null"`
 	WikipediaURL string `gorm:"not null"`
+	ImageURL     string
 	Clues        []Clue
 	CityId       uint
 }

@@ -8,6 +8,12 @@ import (
 func main() {
 
 	database.Connect()
+
+	database.DB.Exec("DELETE FROM states")
+	database.DB.Exec("DELETE FROM cities")
+	database.DB.Exec("DELETE FROM cards")
+	database.DB.Exec("DELETE FROM clues")
+
 	controllers.RunScraper()
 
 	// state := models.State{}

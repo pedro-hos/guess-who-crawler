@@ -62,13 +62,18 @@ func citiesScrap(states map[string]string) {
 		uf := k
 		link := v
 
+		//TODO: Remove
+		if !strings.Contains(uf, "São Paulo") {
+			continue
+		}
+
 		state := models.State{}
 		database.DB.Where(&models.State{Name: uf}).First(&state)
 
 		fmt.Println("#### Scrappring State [ " + strconv.FormatUint(uint64(state.ID), 10) + " ] " + state.Name)
 
 		if state.ID == 0 {
-			fmt.Println("Deu ruim")
+			fmt.Println("We can't find the State")
 			continue
 		}
 
@@ -86,20 +91,24 @@ func citiesScrap(states map[string]string) {
 				elem.ForEach("a[href]", func(_ int, elem2 *colly.HTMLElement) {
 					cityName := clearCityAndStateNames(elem2.Text)
 
-					//This is because the São Paulo and Rio de Janeiro has cities with the same name
-					isSpOrRJCityNatural := cityName == "Naturais da cidade de São Paulo" || cityName == "Naturais da cidade do Rio de Janeiro"
+					//TODO: Remove
+					if strings.Contains(cityName, "São José dos Campos") {
 
-					if regexp.MustCompile(`[A-Z]`).MatchString(h3Title) || isSpOrRJCityNatural {
-						link := elem2.Attr("href")
-						city := models.City{}
+						//This is because the São Paulo and Rio de Janeiro has cities with the same name
+						isSpOrRJCityNatural := cityName == "Naturais da cidade de São Paulo" || cityName == "Naturais da cidade do Rio de Janeiro"
 
-						database.DB.Where(&models.City{Name: cityName}).First(&city)
+						if regexp.MustCompile(`[A-Z]`).MatchString(h3Title) || isSpOrRJCityNatural {
+							link := elem2.Attr("href")
+							city := models.City{}
 
-						if city.ID == 0 {
-							database.DB.Create(&models.City{Name: cityName, StateId: state.ID})
+							database.DB.Where(&models.City{Name: cityName}).First(&city)
+
+							if city.ID == 0 {
+								database.DB.Create(&models.City{Name: cityName, StateId: state.ID})
+							}
+
+							e.Request.Visit(wikipediaUrl + link)
 						}
-
-						e.Request.Visit(wikipediaUrl + link)
 					}
 				})
 
@@ -118,26 +127,39 @@ func citiesScrap(states map[string]string) {
 
 		c.OnHTML("main#content", func(e *colly.HTMLElement) {
 
-			cityName := clearCityAndStateNames(e.DOM.Find(".mw-page-title-main").Text())
-			city := models.City{}
-			database.DB.Where(&models.City{Name: cityName, StateId: state.ID}).First(&city)
+			DOM := e.DOM
+			title := DOM.Find(".mw-page-title-main").Text()
+			isCity := strings.Contains(title, "Naturais")
 
-			if city.ID == 0 {
-				//some pages have people there are not related to the city, but to the state. So far, I don't want to save them. Need to think if I will save on State Capital, or just don't save
-				fmt.Printf("Erro ao buscar %s, não encontrada", cityName)
+			if isCity {
+				cityNameNormalized := clearCityAndStateNames(title)
+				city := models.City{}
+				database.DB.Where(&models.City{Name: cityNameNormalized, StateId: state.ID}).First(&city)
+
+				if city.ID == 0 {
+					//some pages have people there are not related to the city, but to the state. So far, I don't want to save them. Need to think if I will save on State Capital, or just don't save
+					fmt.Printf("Erro ao buscar %s, não encontrada", cityNameNormalized)
+				} else {
+					categoryGroup := DOM.Find(".mw-category-generated").Find("div.mw-category-group")
+					treeSection := categoryGroup.Find(".CategoryTreeSection")
+
+					categoryGroup.Each(func(i int, s *goquery.Selection) {
+						if s.HasNodes(treeSection.Nodes...).Length() == 0 {
+							s.Find("a[href]").Each(func(count int, s2 *goquery.Selection) {
+								link, _ := s2.Attr("href")
+								name := s2.Text()
+								database.DB.Create(&models.Card{Answer: name, CityId: city.ID, WikipediaURL: wikipediaUrl + link})
+								e.Request.Visit(link)
+							})
+						}
+					})
+				}
 			} else {
-				categoryGroup := e.DOM.Find(".mw-category-generated").Find("div.mw-category-group")
-				treeSection := categoryGroup.Find(".CategoryTreeSection")
+				img, hasImg := DOM.Find("table.infobox").Find("a[href].mw-file-description > img.mw-file-element").Attr("src")
 
-				categoryGroup.Each(func(i int, s *goquery.Selection) {
-					if s.HasNodes(treeSection.Nodes...).Length() == 0 {
-						s.Find("a[href]").Each(func(count int, s2 *goquery.Selection) {
-							link, _ := s2.Attr("href")
-							name := s2.Text()
-							database.DB.Create(&models.Card{Answer: name, CityId: city.ID, WikipediaURL: wikipediaUrl + link})
-						})
-					}
-				})
+				if hasImg {
+					database.DB.Model(&models.Card{}).Where("answer = ?", title).Update("ImageURL", "https:"+img)
+				}
 			}
 		})
 
