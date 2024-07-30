@@ -6,7 +6,6 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
-	"time"
 
 	"github.com/PuerkitoBio/goquery"
 	"github.com/gocolly/colly"
@@ -17,16 +16,15 @@ import (
 var wikipediaUrl = "https://pt.wikipedia.org"
 var bornInBrazilByUF = wikipediaUrl + "/wiki/Categoria:Naturais_do_Brasil_por_unidade_federativa"
 
-func RunScraper() {
-	fmt.Println("Starting Wikipedia Scrapping ...")
-	federatedUnitBrazilScrap()
-}
+func RunScraper(stateName string, cityName string) {
 
-func federatedUnitBrazilScrap() {
+	fmt.Println("Starting Wikipedia Scrap ...")
 
 	ufLinks := make(map[string]string)
 	c := colly.NewCollector()
 	c.UserAgent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
+
+	allStates := stateName == ""
 
 	c.OnRequest(func(r *colly.Request) {})
 	c.OnError(func(_ *colly.Response, err error) {
@@ -38,34 +36,38 @@ func federatedUnitBrazilScrap() {
 		if isStateCategoryLink(link) {
 			uf := clearCityAndStateNames(e.Text)
 			state := models.State{}
-			database.DB.Where(&models.State{Name: uf}).First(&state)
 
-			if state.ID == 0 {
-				database.DB.Create(&models.State{Name: uf})
+			if allStates {
+				database.DB.FirstOrCreate(&state, models.State{Name: uf})
+				ufLinks[uf] = wikipediaUrl + link
+			} else {
+				if strings.EqualFold(stateName, uf) {
+					database.DB.FirstOrCreate(&state, models.State{Name: uf})
+					ufLinks[uf] = wikipediaUrl + link
+				}
 			}
-
-			ufLinks[uf] = wikipediaUrl + link
 		}
 	})
 
 	c.OnScraped(func(r *colly.Response) {
-		citiesScrap(ufLinks)
+
+		if len(ufLinks) == 0 {
+			log.Fatalf("Can't find the state %s", stateName)
+		} else {
+			citiesScrap(ufLinks, cityName)
+		}
 	})
 
 	c.Visit(bornInBrazilByUF)
 }
 
-func citiesScrap(states map[string]string) {
-	t1 := time.Now()
+func citiesScrap(states map[string]string, cityName string) {
 	for k, v := range states {
 
 		uf := k
 		link := v
-
-		//TODO: Remove
-		if !strings.Contains(uf, "São Paulo") {
-			continue
-		}
+		allCities := cityName == ""
+		var cityFound bool = false
 
 		state := models.State{}
 		database.DB.Where(&models.State{Name: uf}).First(&state)
@@ -89,27 +91,27 @@ func citiesScrap(states map[string]string) {
 			e.ForEach(".mw-category-group", func(_ int, elem *colly.HTMLElement) {
 				h3Title := elem.ChildText("h3") //From A to Z, however, some pages have ~ and empty strings that we don't care;
 				elem.ForEach("a[href]", func(_ int, elem2 *colly.HTMLElement) {
-					cityName := clearCityAndStateNames(elem2.Text)
+					cityNameNormalized := clearCityAndStateNames(elem2.Text)
 
-					//TODO: Remove
-					if strings.Contains(cityName, "São José dos Campos") {
+					//This is because the São Paulo and Rio de Janeiro has cities with the same name
+					isSpOrRJCityNatural := cityNameNormalized == "Naturais da cidade de São Paulo" || cityNameNormalized == "Naturais da cidade do Rio de Janeiro"
 
-						//This is because the São Paulo and Rio de Janeiro has cities with the same name
-						isSpOrRJCityNatural := cityName == "Naturais da cidade de São Paulo" || cityName == "Naturais da cidade do Rio de Janeiro"
+					if regexp.MustCompile(`[A-Z]`).MatchString(h3Title) || isSpOrRJCityNatural {
+						link := elem2.Attr("href")
+						city := models.City{}
 
-						if regexp.MustCompile(`[A-Z]`).MatchString(h3Title) || isSpOrRJCityNatural {
-							link := elem2.Attr("href")
-							city := models.City{}
-
-							database.DB.Where(&models.City{Name: cityName}).First(&city)
-
-							if city.ID == 0 {
-								database.DB.Create(&models.City{Name: cityName, StateId: state.ID})
-							}
-
+						if allCities {
+							database.DB.FirstOrCreate(&city, models.City{Name: cityNameNormalized, StateId: state.ID})
 							e.Request.Visit(wikipediaUrl + link)
+						} else {
+							if strings.EqualFold(cityName, cityNameNormalized) {
+								database.DB.FirstOrCreate(&city, models.City{Name: cityNameNormalized, StateId: state.ID})
+								cityFound = true
+								e.Request.Visit(wikipediaUrl + link)
+							}
 						}
 					}
+
 				})
 
 			})
@@ -158,29 +160,39 @@ func citiesScrap(states map[string]string) {
 				img, hasImg := DOM.Find("table.infobox").Find("a[href].mw-file-description > img.mw-file-element").Attr("src")
 
 				if hasImg {
-					database.DB.Model(&models.Card{}).Where("answer = ?", title).Update("ImageURL", "https:"+img)
+					imageURL := fmt.Sprintf("https:%s", img)
+					database.DB.Model(&models.Card{}).Where("answer = ?", title).Update("ImageURL", imageURL)
 				}
 			}
 		})
 
-		c.OnScraped(func(r *colly.Response) {})
+		c.OnScraped(func(r *colly.Response) {
+			if !cityFound {
+				log.Fatalf("Can't find the city %s", cityName)
+			}
+		})
+
 		c.Visit(link)
 
 	}
-
-	t2 := time.Now()
-	diff := t2.Sub(t1)
-	fmt.Println(diff)
 }
 
 func clearCityAndStateNames(text string) string {
-	uf := strings.ReplaceAll(text, "Naturais do estado de ", "")
-	uf = strings.ReplaceAll(uf, "Naturais do estado do ", "")
-	uf = strings.ReplaceAll(uf, "Naturais do ", "")
-	uf = strings.ReplaceAll(uf, "Naturais de ", "")
-	uf = strings.ReplaceAll(uf, "Naturais da ", "")
-	uf = strings.ReplaceAll(uf, "(estado)", "")
-	uf = strings.ReplaceAll(uf, "(Brasil)", "")
+	phrases := []string{
+		"Naturais do estado de ",
+		"Naturais do estado do ",
+		"Naturais do ",
+		"Naturais de ",
+		"Naturais da ",
+		"(estado)",
+		"(Brasil)",
+	}
+
+	uf := text
+	for _, phrase := range phrases {
+		uf = strings.ReplaceAll(uf, phrase, "")
+	}
+
 	return uf
 }
 

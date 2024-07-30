@@ -17,6 +17,33 @@ This is the pages scrapped:
 
 After all this steps, we get trainned LLM in order to provide the clues. (**In progress**)
 
+## How to use
+
+You can use the following CLI to scrap the data:
+
+```{bash}
+go run main.go --help
+need to write something better here, explain that this uses LLM, 
+	intended to create the card game for the Guess-Who etc
+
+Usage:
+  Guess-Who Crawler [flags]
+  Guess-Who [command]
+
+Available Commands:
+  completion  Generate the autocompletion script for the specified shell
+  help        Help about any command
+  scrap       Scrap information
+
+Flags:
+  -h, --help      help for Guess-Who
+  -v, --version   version for Guess-Who
+
+Use "Guess-Who [command] --help" for more information about a command.
+```
+
+You can pass `--state` and `--city` paramenter names in order to get an specific state and city. Note, if you pass the `--city` name paramenter, you should to pass the `--state` paramenter.
+
 ## Todo
 This is the todo list in order to get the Beta version working
 
@@ -26,7 +53,8 @@ This is the todo list in order to get the Beta version working
 - [x] Save all states scrapped on the database;
 - [x] Iterate over the states scrapped before and get all cities belong to the respective state. For example [Naturals from São Paulo State](https://pt.wikipedia.org/w/index.php?title=Categoria:Naturais_do_estado_de_S%C3%A3o_Paulo&subcatuntil=Jacare%C3%AD%0ANaturais+de+Jacare%C3%AD#mw-subcategories) and save it;
 - [x] Iterate over the cities scrapped before, for example, [born in São José dos Campos](https://pt.wikipedia.org/wiki/Categoria:Naturais_de_S%C3%A3o_Jos%C3%A9_dos_Campos) page, and save the person name as the card answer and the wikipedia link, for example: [Cassinano Ricardo](https://pt.wikipedia.org/wiki/Cassiano_Ricardo) page save those information.
-- [ ] Scrap the Avatar and save the link
+- [x] Scrap the Avatar and save the link
+- [x] Configure CLI using Cobra CLI
 - [ ] **To be decided** - We need to use some local LLM with [Podman AI](https://podman-desktop.io/docs/ai-lab) or [InstructLab AI](https://instructlab.ai/) in order to training a Model that will be able to:
     - [ ] Read the Wikipedia saved before and provide the Clues based on the respective people page OR
     - [ ] Read the output from the page Wikipedia API for example: `https://pt.wikipedia.org/w/api.php?action=query&prop=revisions&rvprop=content&format=json&titles=Aramis%20Brito&rvsection=0` and provided the clues based on that response
