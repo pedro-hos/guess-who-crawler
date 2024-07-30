@@ -9,7 +9,7 @@ var state, city string
 var scrapCmd = &cobra.Command{
 	Use:     "scrap",
 	Aliases: []string{"scrap"},
-	Short:   "Scrap information",
+	Short:   "Scrap information command",
 	PreRun: func(cmd *cobra.Command, args []string) {
 		if city != "" {
 			cmd.MarkFlagRequired("state")
