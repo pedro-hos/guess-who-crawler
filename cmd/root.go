@@ -11,9 +11,11 @@ var version = "0.0.1"
 var rootCmd = &cobra.Command{
 	Use:     "Guess-Who Crawler",
 	Version: version,
-	Short:   "Guess-Who Crawler - CLI to scrap information regarding born in Brazil",
-	Long: `need to write something better here, explain that this uses LLM, 
-	intended to create the card game for the Guess-Who etc`,
+	Short:   "Guess-Who Crawler: A CLI tool to scrape information about famous people born in Brazil from Wikipedia.",
+	Long: `This CLI scrapes data from Wikipedia about famous Brazilians to create cards for the Guess-Who 
+	game. It also calls a Large Language Model (LLM) to generate clue cards. You can specify city and state 
+	parameters to get data for specific locations, or leave them blank to retrieve data for all Brazilian 
+	states and cities.`,
 	Run: func(cmd *cobra.Command, args []string) {},
 }
 

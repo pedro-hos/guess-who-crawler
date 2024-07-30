@@ -23,8 +23,10 @@ You can use the following CLI to scrap the data:
 
 ```{bash}
 go run main.go --help
-need to write something better here, explain that this uses LLM, 
-	intended to create the card game for the Guess-Who etc
+This CLI scrapes data from Wikipedia about famous Brazilians to create cards for the Guess-Who 
+	game. It also calls a Large Language Model (LLM) to generate clue cards. You can specify city and state 
+	parameters to get data for specific locations, or leave them blank to retrieve data for all Brazilian 
+	states and cities.
 
 Usage:
   Guess-Who Crawler [flags]
@@ -40,6 +42,7 @@ Flags:
   -v, --version   version for Guess-Who
 
 Use "Guess-Who [command] --help" for more information about a command.
+
 ```
 
 You can pass `--state` and `--city` paramenter names in order to get an specific state and city. Note, if you pass the `--city` name paramenter, you should to pass the `--state` paramenter.
