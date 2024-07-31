@@ -1,7 +1,11 @@
 package cmd
 
 import (
+	"log"
+
 	"github.com/pedro-hos/guess-who-web/controllers"
+	"github.com/pedro-hos/guess-who-web/database"
+	"github.com/pedro-hos/guess-who-web/util"
 	"github.com/spf13/cobra"
 )
 
@@ -16,6 +20,13 @@ var scrapCmd = &cobra.Command{
 		}
 	},
 	Run: func(cmd *cobra.Command, args []string) {
+
+		config, errConfig := util.LoadConfig(".")
+		if errConfig != nil {
+			log.Fatal("cannot load config:", errConfig)
+		}
+
+		database.Connect(config, Prod)
 		controllers.RunScraper(state, city)
 	},
 }

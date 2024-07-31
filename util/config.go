@@ -3,7 +3,7 @@ package util
 import "github.com/spf13/viper"
 
 type Config struct {
-	Environment string `mapstructure:"ENVIRONMENT"`
+	DbUrl string `mapstructure:"DB_URL"`
 }
 
 // LoadConfig reads configuration from file or environment variables.

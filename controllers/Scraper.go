@@ -9,12 +9,13 @@ import (
 
 	"github.com/PuerkitoBio/goquery"
 	"github.com/gocolly/colly"
+
 	"github.com/pedro-hos/guess-who-web/database"
 	"github.com/pedro-hos/guess-who-web/models"
 )
 
 var wikipediaUrl = "https://pt.wikipedia.org"
-var bornInBrazilByUF = wikipediaUrl + "/wiki/Categoria:Naturais_do_Brasil_por_unidade_federativa"
+var bornInBrazilByUF = fmt.Sprintf("%s/wiki/Categoria:Naturais_do_Brasil_por_unidade_federativa", wikipediaUrl)
 
 func RunScraper(stateName string, cityName string) {
 
@@ -33,6 +34,7 @@ func RunScraper(stateName string, cityName string) {
 
 	c.OnHTML("a[href]", func(e *colly.HTMLElement) {
 		link := e.Attr("href")
+
 		if isStateCategoryLink(link) {
 			uf := clearCityAndStateNames(e.Text)
 			state := models.State{}
@@ -140,7 +142,7 @@ func citiesScrap(states map[string]string, cityName string) {
 
 				if city.ID == 0 {
 					//some pages have people there are not related to the city, but to the state. So far, I don't want to save them. Need to think if I will save on State Capital, or just don't save
-					fmt.Printf("Erro ao buscar %s, não encontrada", cityNameNormalized)
+					fmt.Printf("Cant find the city %s, on the database", cityNameNormalized)
 				} else {
 					categoryGroup := DOM.Find(".mw-category-generated").Find("div.mw-category-group")
 					treeSection := categoryGroup.Find(".CategoryTreeSection")
@@ -168,7 +170,7 @@ func citiesScrap(states map[string]string, cityName string) {
 
 		c.OnScraped(func(r *colly.Response) {
 			if !cityFound {
-				log.Fatalf("Can't find the city %s", cityName)
+				log.Fatalf("Can't find the city %s on the wikipedia page. Please, review", cityName)
 			}
 		})
 
