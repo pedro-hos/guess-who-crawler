@@ -8,6 +8,5 @@ type Card struct {
 	Answer       string `gorm:"not null"`
 	WikipediaURL string `gorm:"not null;unique"`
 	ImageURL     string
-	Clues        []Clue
 	CityId       uint
 }

@@ -28,6 +28,6 @@ func Connect(config util.Config, isProd bool) {
 	}
 
 	// Migrate the schema
-	DB.AutoMigrate(&models.State{}, &models.City{}, &models.Clue{}, &models.Card{})
+	DB.AutoMigrate(&models.State{}, &models.City{}, &models.Card{})
 
 }
