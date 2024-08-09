@@ -1,11 +1,16 @@
 package controllers
 
 import (
+	"encoding/json"
 	"fmt"
+	"io"
 	"log"
+	"net/http"
+	"os"
 	"regexp"
 	"strconv"
 	"strings"
+	"sync"
 
 	"github.com/PuerkitoBio/goquery"
 	"github.com/gocolly/colly"
@@ -17,8 +22,45 @@ import (
 var wikipediaUrl = "https://pt.wikipedia.org"
 var bornInBrazilByUF = fmt.Sprintf("%s/wiki/Categoria:Naturais_do_Brasil_por_unidade_federativa", wikipediaUrl)
 
-func RunScraper(stateName string, cityName string) {
+func readData(url string, rvsection string) models.Response {
+	name := strings.ReplaceAll(url, wikipediaUrl+"/wiki/", "")
+	wikiEndpoint := fmt.Sprintf("https://pt.wikipedia.org/w/api.php?action=query&prop=revisions&titles=%s&rvslots=*&rvprop=content&formatversion=2&format=json&rvsection=%s", name, rvsection)
 
+	response, err := http.Get(wikiEndpoint)
+
+	if err != nil {
+		fmt.Print(err.Error())
+		os.Exit(1)
+	}
+
+	responseData, err := io.ReadAll(response.Body)
+
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	var responseObject models.Response
+	json.Unmarshal(responseData, &responseObject)
+
+	return responseObject
+}
+
+func getInfoFromWikiApi(wg *sync.WaitGroup, url string) {
+	defer wg.Done()
+
+	responseObject := readData(url, "1")
+	content := responseObject.Query.Pages[0].Revisions[0].Slots.Main.Content
+
+	if content == "" {
+		responseObject := readData(url, "0")
+		content = responseObject.Query.Pages[0].Revisions[0].Slots.Main.Content
+	}
+
+	database.DB.Model(&models.Card{}).Where("wikipedia_url = ?", url).Update("content_page", content)
+}
+
+func RunScraper(stateName string, cityName string) {
+	defer fmt.Println("Scrap Finished!")
 	fmt.Println("Starting Wikipedia Scrap ...")
 
 	ufLinks := make(map[string]string)
@@ -64,6 +106,8 @@ func RunScraper(stateName string, cityName string) {
 }
 
 func citiesScrap(states map[string]string, cityName string) {
+	var wg sync.WaitGroup
+
 	for k, v := range states {
 
 		uf := k
@@ -152,11 +196,17 @@ func citiesScrap(states map[string]string, cityName string) {
 							s.Find("a[href]").Each(func(count int, s2 *goquery.Selection) {
 								link, _ := s2.Attr("href")
 								name := s2.Text()
-								database.DB.Create(&models.Card{Answer: name, CityId: city.ID, WikipediaURL: wikipediaUrl + link})
+								pageUrl := wikipediaUrl + link
+
+								database.DB.Create(&models.Card{Answer: name, CityId: city.ID, WikipediaURL: pageUrl})
+
+								wg.Add(1)
+								go getInfoFromWikiApi(&wg, pageUrl)
 								e.Request.Visit(link)
 							})
 						}
 					})
+
 				}
 			} else {
 				img, hasImg := DOM.Find("table.infobox").Find("a[href].mw-file-description > img.mw-file-element").Attr("src")
@@ -177,6 +227,8 @@ func citiesScrap(states map[string]string, cityName string) {
 		c.Visit(link)
 
 	}
+
+	wg.Wait()
 }
 
 func clearCityAndStateNames(text string) string {
